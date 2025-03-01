@@ -1,0 +1,95 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_MLX90614.h>
+#include "MAX30100_PulseOximeter.h"
+
+// OLED Display Configuration
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// Temperature Sensor (MLX90614)
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+
+// Pulse Oximeter Sensor (MAX30100)
+#define REPORTING_PERIOD_MS 1000
+PulseOximeter pox;
+uint32_t lastReportTime = 0;
+
+// Callback function to update heart rate & SpO2
+void onBeatDetected() {
+    Serial.println("Heartbeat Detected!");
+}
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Initialize OLED Display
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+        Serial.println(F("SSD1306 initialization failed!"));
+        for (;;);
+    }
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    
+    // Initialize MLX90614 (Temperature Sensor)
+    mlx.begin();
+    
+    // Initialize MAX30100 (Pulse Oximeter)
+    if (!pox.begin()) {
+        Serial.println("Failed to initialize MAX30100!");
+        for (;;);
+    }
+    
+    pox.setOnBeatDetectedCallback(onBeatDetected);
+}
+
+void loop() {
+    // Read MLX90614 Temperature
+    float temperature = mlx.readObjectTempC();
+
+    // Read Heart Rate & SpO2 from MAX30100
+    pox.update();
+    float heartRate = pox.getHeartRate();
+    float spo2 = pox.getSpO2();
+
+    // Update OLED Display
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("Health Monitoring");
+    
+    display.setCursor(0, 15);
+    display.print("Temp: ");
+    display.print(temperature);
+    display.print(" C");
+    
+    display.setCursor(0, 30);
+    display.print("Heart Rate: ");
+    display.print(heartRate);
+    display.print(" BPM");
+
+    display.setCursor(0, 45);
+    display.print("SpO2: ");
+    display.print(spo2);
+    display.print(" %");
+
+    display.display();
+
+    // Serial Monitor Output
+    Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" C");
+    Serial.print("Heart Rate: "); Serial.print(heartRate); Serial.println(" BPM");
+    Serial.print("SpO2: "); Serial.print(spo2); Serial.println(" %");
+    Serial.println("-----------------------------");
+
+    // Alert if abnormal values detected
+    if (heartRate < 50 || heartRate > 120) {
+        Serial.println("⚠ Alert: Abnormal Heart Rate!");
+    }
+    if (spo2 < 90) {
+        Serial.println("⚠ Alert: Low SpO2 Level!");
+    }
+
+    delay(2000); // Wait before next reading
+}
